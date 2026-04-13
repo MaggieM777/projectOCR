@@ -1,13 +1,11 @@
 import streamlit as st
-import pytesseract
+import easyocr
 from PIL import Image, ImageEnhance, ImageOps
-
-# 👉 Ако си на Windows:
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+import numpy as np
 
 st.set_page_config(page_title="Food Scanner", page_icon="🍔")
 
-st.title("🍔 Food Ingredients Scanner")
+st.title("🍔 Food Ingredients Scanner (EasyOCR)")
 st.write("Качи снимка на съставките и ще проверим за вредни вещества.")
 
 # ❌ Списък с вредни съставки
@@ -19,20 +17,37 @@ bad_ingredients = [
     "палмово масло", "глутамат", "консервант"
 ]
 
-# 🧠 Функция за OCR preprocessing
+# 🧠 OCR reader (зарежда се веднъж)
+@st.cache_resource
+def load_reader():
+    return easyocr.Reader(['en', 'bg'], gpu=False)
+
+reader = load_reader()
+
+# 🧠 preprocessing
 def preprocess_image(image):
-    gray = ImageOps.grayscale(image)  # grayscale
+    gray = ImageOps.grayscale(image)
     enhancer = ImageEnhance.Contrast(gray)
-    gray = enhancer.enhance(2.0)      # повече контраст
+    gray = enhancer.enhance(2.0)
     return gray
 
-# 🔍 Функция за анализ
+# 🔍 анализ
 def analyze_text(text):
     found = []
     for ingredient in bad_ingredients:
         if ingredient in text.lower():
             found.append(ingredient)
     return found
+
+# 🔤 OCR функция
+def run_ocr(image):
+    img = np.array(image)
+    results = reader.readtext(img)
+    
+    texts = [res[1] for res in results]
+    full_text = " ".join(texts)
+    
+    return full_text
 
 # 📂 Upload
 uploaded_file = st.file_uploader("📷 Качи изображение", type=["jpg", "jpeg", "png"])
@@ -44,7 +59,7 @@ if uploaded_file:
     processed = preprocess_image(image)
 
     # 🧾 OCR
-    text = pytesseract.image_to_string(processed, config="--psm 6")
+    text = run_ocr(processed)
 
     st.subheader("📄 Разпознат текст:")
     st.text(text)
@@ -72,7 +87,7 @@ if camera_image:
 
     processed = preprocess_image(image)
 
-    text = pytesseract.image_to_string(processed, config="--psm 6")
+    text = run_ocr(processed)
 
     st.subheader("📄 Разпознат текст:")
     st.text(text)
